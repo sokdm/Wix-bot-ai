@@ -22,7 +22,7 @@ app.use(helmet());
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://wix-bot-ai.vercel.app',  // Your Vercel URL (update after deploy)
+  'https://wix-bot-ai-ten.vercel.app',  // Your Vercel URL (update after deploy)
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
