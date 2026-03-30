@@ -18,23 +18,29 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// CORS - Allow Vercel and localhost
+// CORS - Allow your Vercel frontend and localhost
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://wix-bot-ai-ten.vercel.app',  // Your Vercel URL (update after deploy)
-  process.env.FRONTEND_URL
-].filter(Boolean);
+  'https://wix-bot-ai-ten.vercel.app',  // Your Vercel URL
+  'https://wix-whatsapp-backend.onrender.com'
+];
 
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      logger.warn('CORS blocked origin: ' + origin);
+      callback(null, true); // Allow all for now during testing
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(apiLimiter);
@@ -64,7 +70,8 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    service: 'wix-whatsapp-backend'
   });
 });
 
@@ -88,7 +95,7 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   logger.info('Server running on port ' + PORT);
   logger.info('Environment: ' + (process.env.NODE_ENV || 'development'));
   
