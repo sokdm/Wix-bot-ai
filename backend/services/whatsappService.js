@@ -28,7 +28,6 @@ class WhatsAppService extends EventEmitter {
   }
 
   formatPairingCode(code) {
-    if(code) {
     if (!code || code.length !== 8) return code;
     return code.slice(0, 3) + '-' + code.slice(3, 6) + '-' + code.slice(6, 8);
   }
@@ -43,7 +42,6 @@ class WhatsAppService extends EventEmitter {
 
       logger.info('Initializing session for: +' + phoneNumber);
 
-      // CRITICAL: For pairing code to work, use these exact browser settings
       const sock = makeWASocket({
         version,
         logger: pino({ level: 'silent' }),
@@ -52,7 +50,6 @@ class WhatsAppService extends EventEmitter {
           creds: state.creds,
           keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
-        // IMPORTANT: Use Chrome on Linux for pairing code support
         browser: ['Chrome (Linux)', '', ''],
         markOnlineOnConnect: true,
         syncFullHistory: false,
@@ -70,7 +67,6 @@ class WhatsAppService extends EventEmitter {
       let codeReceived = false;
       let connectionOpened = false;
       
-      // Promise that resolves when we get pairing code
       const codePromise = new Promise((resolve, reject) => {
         const checkInterval = setInterval(() => {
           if (pairingCode) {
@@ -81,7 +77,7 @@ class WhatsAppService extends EventEmitter {
           if (connectionOpened) {
             clearInterval(checkInterval);
             clearTimeout(timeout);
-            resolve(null); // Connected without code (shouldn't happen)
+            resolve(null);
           }
         }, 500);
         
@@ -107,51 +103,44 @@ class WhatsAppService extends EventEmitter {
         
         logger.info('Connection update: ' + connection + ', qr: ' + !!qr);
 
-        // When QR is received, request pairing code immediately
         if (qr && !codeReceived && !pairingCode && !connectionOpened) {
           codeReceived = true;
           
           try {
-            // Wait for socket to be ready
             await new Promise(r => setTimeout(r, 1500));
             
             logger.info('Requesting pairing code for: ' + phoneNumber);
             
-            // Clean phone number - must be digits only, no +
             const cleanPhone = phoneNumber.toString().replace(/\D/g, '');
             
             logger.info('Clean phone for pairing: ' + cleanPhone);
             
-            // Request pairing code - THIS IS THE CRITICAL CALL
             const code = await sock.requestPairingCode(cleanPhone);
             
             if (code && code.length > 0) {
-              // Clean the code - uppercase, remove dashes/spaces
               pairingCode = code.toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
               
-              // WhatsApp pairing codes are always 8 characters
               if (pairingCode.length === 8) {
                 const session = this.sessions.get(sessionId);
                 if (session) session.pairingCode = pairingCode;
                 
                 const displayCode = this.formatPairingCode(pairingCode);
-                logger.info('✅ Pairing code generated: ' + pairingCode + ' (Display: ' + displayCode + ')');
+                logger.info('Pairing code generated: ' + pairingCode + ' (Display: ' + displayCode + ')');
               } else {
-                logger.error('❌ Invalid code length: ' + pairingCode.length + ', code: ' + pairingCode);
+                logger.error('Invalid code length: ' + pairingCode.length);
                 pairingCode = null;
               }
             } else {
-              logger.error('❌ No pairing code received from WhatsApp');
+              logger.error('No pairing code received');
             }
           } catch (err) {
-            logger.error('❌ Pairing code request failed: ' + err.message);
-            logger.error(err.stack);
+            logger.error('Pairing code request failed: ' + err.message);
           }
         }
 
         if (connection === 'open') {
           connectionOpened = true;
-          logger.info('✅ Session ' + sessionId + ' connected successfully');
+          logger.info('Session ' + sessionId + ' connected');
           await this.handleConnectionOpen(sessionId, sock);
         }
 
@@ -164,7 +153,6 @@ class WhatsAppService extends EventEmitter {
           logger.info('Session ' + sessionId + ' closed. Status: ' + statusCode);
           
           if (shouldReconnect && !codeReceived) {
-            logger.info('Reconnecting session ' + sessionId + '...');
             setTimeout(() => this.initializeSession(sessionId, phoneNumber, userId), 5000);
           } else {
             await this.cleanupSession(sessionId);
@@ -185,7 +173,6 @@ class WhatsAppService extends EventEmitter {
 
     } catch (err) {
       logger.error('Initialize session error: ' + err.message);
-      logger.error(err.stack);
       return null;
     }
   }
