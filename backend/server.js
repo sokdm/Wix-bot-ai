@@ -17,7 +17,26 @@ const app = express();
 
 // Security middleware
 app.use(helmet());
-app.use(cors());
+
+// CORS - Allow Vercel and localhost
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://wix-bot-ai.vercel.app',  // Your Vercel URL (update after deploy)
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(apiLimiter);
 
 // Body parsing
@@ -70,10 +89,10 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  logger.info(`🚀 Server running on port ${PORT}`);
-  logger.info(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.info('Server running on port ' + PORT);
+  logger.info('Environment: ' + (process.env.NODE_ENV || 'development'));
   
-  // Create temp directory if not exists
+  // Create temp directory
   const fs = require('fs-extra');
   fs.ensureDirSync(path.join(__dirname, 'temp'));
 });
