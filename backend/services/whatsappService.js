@@ -28,6 +28,7 @@ class WhatsAppService extends EventEmitter {
   }
 
   formatPairingCode(code) {
+    if(code) {
     if (!code || code.length !== 8) return code;
     return code.slice(0, 3) + '-' + code.slice(3, 6) + '-' + code.slice(6, 8);
   }
@@ -42,7 +43,7 @@ class WhatsAppService extends EventEmitter {
 
       logger.info('Initializing session for: +' + phoneNumber);
 
-      // IMPORTANT: For pairing code to work, we need specific browser settings
+      // CRITICAL: For pairing code to work, use these exact browser settings
       const sock = makeWASocket({
         version,
         logger: pino({ level: 'silent' }),
@@ -51,7 +52,7 @@ class WhatsAppService extends EventEmitter {
           creds: state.creds,
           keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
-        // Use Chrome on Linux for pairing code support - this is crucial
+        // IMPORTANT: Use Chrome on Linux for pairing code support
         browser: ['Chrome (Linux)', '', ''],
         markOnlineOnConnect: true,
         syncFullHistory: false,
@@ -62,16 +63,14 @@ class WhatsAppService extends EventEmitter {
         keepAliveIntervalMs: 30000,
         emitOwnEvents: true,
         fireInitQueries: true,
-        downloadHistory: false,
-        // Generate high quality link previews
-        linkPreviewImageThumbnailWidth: 1980,
-        generateHighQualityLinkPreview: true
+        downloadHistory: false
       });
 
       let pairingCode = null;
       let codeReceived = false;
+      let connectionOpened = false;
       
-      // Create a promise that resolves when we get the pairing code
+      // Promise that resolves when we get pairing code
       const codePromise = new Promise((resolve, reject) => {
         const checkInterval = setInterval(() => {
           if (pairingCode) {
@@ -79,14 +78,19 @@ class WhatsAppService extends EventEmitter {
             clearTimeout(timeout);
             resolve(pairingCode);
           }
+          if (connectionOpened) {
+            clearInterval(checkInterval);
+            clearTimeout(timeout);
+            resolve(null); // Connected without code (shouldn't happen)
+          }
         }, 500);
         
         const timeout = setTimeout(() => {
           clearInterval(checkInterval);
-          if (!pairingCode) {
+          if (!pairingCode && !connectionOpened) {
             reject(new Error('Pairing code timeout'));
           }
-        }, 90000); // 90 seconds timeout
+        }, 90000);
       });
 
       this.sessions.set(sessionId, {
@@ -98,36 +102,34 @@ class WhatsAppService extends EventEmitter {
         isReady: false
       });
 
-      // Handle connection updates
       sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
         logger.info('Connection update: ' + connection + ', qr: ' + !!qr);
 
-        // When we get QR code, immediately request pairing code
-        if (qr && !codeReceived && !pairingCode) {
+        // When QR is received, request pairing code immediately
+        if (qr && !codeReceived && !pairingCode && !connectionOpened) {
           codeReceived = true;
           
           try {
-            // Wait for socket to stabilize
-            await new Promise(r => setTimeout(r, 1000));
+            // Wait for socket to be ready
+            await new Promise(r => setTimeout(r, 1500));
             
             logger.info('Requesting pairing code for: ' + phoneNumber);
             
-            // Clean phone number - remove all non-digits
+            // Clean phone number - must be digits only, no +
             const cleanPhone = phoneNumber.toString().replace(/\D/g, '');
             
             logger.info('Clean phone for pairing: ' + cleanPhone);
             
-            // Request pairing code from WhatsApp
-            // This is the critical part - we need to call this immediately when QR is received
+            // Request pairing code - THIS IS THE CRITICAL CALL
             const code = await sock.requestPairingCode(cleanPhone);
             
             if (code && code.length > 0) {
-              // Clean the code - uppercase and remove any special chars
+              // Clean the code - uppercase, remove dashes/spaces
               pairingCode = code.toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
               
-              // Ensure it's 8 characters
+              // WhatsApp pairing codes are always 8 characters
               if (pairingCode.length === 8) {
                 const session = this.sessions.get(sessionId);
                 if (session) session.pairingCode = pairingCode;
@@ -135,11 +137,11 @@ class WhatsAppService extends EventEmitter {
                 const displayCode = this.formatPairingCode(pairingCode);
                 logger.info('✅ Pairing code generated: ' + pairingCode + ' (Display: ' + displayCode + ')');
               } else {
-                logger.error('Invalid code length received: ' + pairingCode.length);
+                logger.error('❌ Invalid code length: ' + pairingCode.length + ', code: ' + pairingCode);
                 pairingCode = null;
               }
             } else {
-              logger.error('No pairing code received from WhatsApp');
+              logger.error('❌ No pairing code received from WhatsApp');
             }
           } catch (err) {
             logger.error('❌ Pairing code request failed: ' + err.message);
@@ -148,6 +150,7 @@ class WhatsAppService extends EventEmitter {
         }
 
         if (connection === 'open') {
+          connectionOpened = true;
           logger.info('✅ Session ' + sessionId + ' connected successfully');
           await this.handleConnectionOpen(sessionId, sock);
         }
@@ -158,10 +161,10 @@ class WhatsAppService extends EventEmitter {
                                   statusCode !== DisconnectReason.badSession &&
                                   statusCode !== 401;
           
-          logger.info('Session ' + sessionId + ' closed. Status: ' + statusCode + ', Reconnect: ' + shouldReconnect);
+          logger.info('Session ' + sessionId + ' closed. Status: ' + statusCode);
           
           if (shouldReconnect && !codeReceived) {
-            logger.info('Reconnecting session ' + sessionId + ' in 5 seconds...');
+            logger.info('Reconnecting session ' + sessionId + '...');
             setTimeout(() => this.initializeSession(sessionId, phoneNumber, userId), 5000);
           } else {
             await this.cleanupSession(sessionId);
@@ -171,7 +174,6 @@ class WhatsAppService extends EventEmitter {
 
       sock.ev.on('creds.update', saveCreds);
 
-      // Wait for pairing code
       try {
         const result = await codePromise;
         return result;

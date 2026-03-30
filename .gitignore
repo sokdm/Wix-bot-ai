@@ -24,3 +24,5 @@ logs/
 
 # Temporary files
 *.tmp
+.vercel
+.env*.local
