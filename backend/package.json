@@ -5,44 +5,32 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "termux": "node server.js --termux"
+    "dev": "nodemon server.js"
   },
-  "keywords": [
-    "whatsapp",
-    "bot",
-    "ai",
-    "saas",
-    "wix"
-  ],
+  "keywords": ["whatsapp", "bot", "ai", "saas"],
   "author": "Wisdom",
   "license": "MIT",
   "dependencies": {
-    "@whiskeysockets/baileys": "^7.0.0-rc.9",
-    "axios": "^1.6.0",
+    "@whiskeysockets/baileys": "^6.6.0",
+    "express": "^4.18.2",
+    "mongoose": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "express-rate-limit": "^7.1.5",
-    "fluent-ffmpeg": "^2.1.2",
-    "form-data": "^4.0.0",
-    "fs-extra": "^11.1.1",
-    "helmet": "^7.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "mime-types": "^2.1.35",
-    "moment": "^2.29.4",
-    "mongoose": "^8.0.0",
+    "axios": "^1.6.0",
+    "qrcode": "^1.5.3",
     "node-cache": "^5.1.2",
-    "node-cron": "^3.0.3",
-    "path": "^0.12.7",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
     "pino": "^8.16.2",
     "pino-pretty": "^10.2.3",
-    "qrcode": "^1.5.3",
-    "qrcode-terminal": "^0.12.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.2"
+    "fluent-ffmpeg": "^2.1.2",
+    "mime-types": "^2.1.35",
+    "form-data": "^4.0.0",
+    "fs-extra": "^11.1.1",
+    "moment": "^2.29.4",
+    "node-cron": "^3.0.3"
   },
   "engines": {
     "node": ">=18.0.0"
